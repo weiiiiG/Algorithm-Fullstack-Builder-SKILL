@@ -1,4 +1,0 @@
-interface:
-  display_name: "Algorithm Fullstack Builder"
-  short_description: "Turn algorithm files into full-stack apps"
-  default_prompt: "Use $algorithm-fullstack-builder to turn this algorithm project into a runnable frontend-backend application."
