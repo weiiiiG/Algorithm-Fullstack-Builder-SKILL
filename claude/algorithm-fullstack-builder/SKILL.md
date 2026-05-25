@@ -1,11 +1,11 @@
 ---
 name: algorithm-fullstack-builder
-description: Use when the user provides or uploads an algorithm script, notebook-derived project, or repository and wants Claude to parse the algorithm first, set up or repair its runtime environment, then build a runnable frontend-backend application around the real algorithm contract.
+description: Use when the user provides or uploads an algorithm script, notebook-derived project, or repository and wants Claude to ask for the training main file and database connection choice, parse the algorithm, set up the local runtime environment, then build a locally runnable frontend-backend application around the real algorithm contract, including multiple training variants when present.
 ---
 
 # Algorithm Fullstack Builder
 
-Use this skill to turn an uploaded or provided algorithm file, script, notebook-derived project, or algorithm repository into a runnable full-stack application.
+Use this skill to turn an uploaded or provided algorithm file, script, notebook-derived project, or algorithm repository into a locally runnable full-stack application.
 
 Follow this order strictly:
 
@@ -14,6 +14,19 @@ Follow this order strictly:
 3. Build the frontend and backend last: derive APIs, job handling, artifacts, screens, charts, and validation from the real algorithm contract.
 
 Do not build UI before understanding the algorithm. Do not assume every algorithm is a training workflow.
+
+## Required Questions Before Starting
+
+Before analyzing, creating an environment, or generating code, ask the user:
+
+1. Which file is the training main file or primary algorithm entry point. If the user is unsure, inspect the file tree, infer candidates, and ask for confirmation.
+2. Whether they want to provide database connection information. This means only connection details such as database type, host, port, database name, username, password, and connection options.
+
+Do not ask the user to predefine table names, field names, field types, or indexes. Derive tables and fields by parsing the algorithm inputs, outputs, training results, metrics, logs, and artifact metadata.
+
+Persist training results, run summaries, metrics, log summaries, text reports, and serializable result information. If the user provides database connection information, store these records in that database. If the user says not to use a database or does not provide database details, store them by default inside the backend project folder, such as a SQLite database or JSONL/JSON files under `backend/data/`. Large files, model weights, images, and downloadable artifacts still belong under `artifacts/`; databases or local result files should store metadata and text/structured information.
+
+The delivered system is local-first: backend, frontend, database, or local result storage should run on the user's machine or local development environment. Do not create a cloud deployment flow unless the user explicitly asks for deployment.
 
 ## 1. Locate The Algorithm
 
@@ -48,11 +61,14 @@ Runtime mode:
 Primary entry point:
 Inputs:
 Parameters:
+Training variants:
 Required files:
 Outputs:
 Artifacts:
 External dependencies:
 Local dependencies:
+Database connection:
+Result persistence location:
 Failure modes:
 ```
 
@@ -69,6 +85,8 @@ Classify the workflow:
 Input types may include CSV, Excel, JSON, images, text, directories, model files, uploaded artifacts, and manual form values.
 
 Output types may include summaries, metrics, series, tables, images, generated files, model files, logs, histories, and predictions.
+
+If there are multiple training modes, or if training behavior is controlled by command-line arguments, config files, model choices, dataset options, feature selections, or hyperparameter presets, extract them as `Training variants`. Backend schemas must support variant selection or config objects. The frontend must provide clear switching controls and persist the selected variant and parameters for each run.
 
 ## 3. Create The Runtime Environment
 
@@ -189,6 +207,9 @@ Backend responsibilities:
 
 - Validate uploads and config before creating a job.
 - Store job metadata, result summaries, and structured results.
+- Store training results, metrics, log summaries, and text reports; when the user does not specify a database, write to local persistent storage inside the backend project folder.
+- Design tables and fields from parsed algorithm behavior; do not ask for table structure when the user only provides database connection details.
+- When training has multiple variants, store the variant name, config parameters, and version information for each run.
 - Save large files under `artifacts/`.
 - Return consistent errors: `{"error": {"code": "...", "message": "..."}}`.
 - Use `pending`, `running`, `completed`, `failed`, and `cancelled` for long jobs.
@@ -199,6 +220,7 @@ Minimum long-job tables:
 
 - `algorithm_jobs`: job id, status, message, input name, config JSON, summary JSON, result JSON, created/completed time.
 - `algorithm_artifacts`: job id, artifact type, filename, path, size, MIME, created time.
+- `algorithm_results` or equivalent: training results, metrics, text reports, log summaries, and variant config.
 
 Add specialized tables only when paging, filtering, or comparing large structured data requires them.
 
@@ -219,6 +241,7 @@ Default stack: React, TypeScript, Vite, ECharts, and the existing UI library. Us
 Generate screens from the algorithm contract:
 
 - Input screen: upload controls, text inputs, parameter form, sample selector.
+- Variant screen or controls: when training has multiple modes, provide training variant switching, parameter presets, descriptions, and defaults.
 - Run screen: submit, validate, status, cancel, retry, progress, logs.
 - Result screen: summary, metrics, charts, tables, previews, downloads.
 - History screen: job list, filters, comparison, rerun with same config.
@@ -267,18 +290,20 @@ The first screen must be the real work surface, not a marketing page. Keep layou
 Follow this order:
 
 1. Locate the uploaded or provided algorithm directory.
-2. Read the file tree and primary entry point.
-3. Extract the algorithm contract.
-4. Create or repair the runtime environment.
-5. Run the original algorithm with the smallest useful sample.
-6. Wrap the algorithm as a callable adapter.
-7. Add schemas, validation, job status, and artifact saving.
-8. Add API endpoints.
-9. Add frontend API client and types.
-10. Build input, status, result, and history screens.
-11. Run backend, frontend, and end-to-end validation.
+2. Ask and confirm the training main file or primary algorithm entry point.
+3. Ask whether the user provides database connection details, including database type, host, port, database name, username, password, and connection options; do not require table or field definitions.
+4. Read the file tree and primary entry point.
+5. Extract the algorithm contract, database tables/fields, and optional training variants.
+6. Create or repair the local runtime environment.
+7. Run the original algorithm with the smallest useful sample.
+8. Wrap the algorithm as a callable adapter.
+9. Add schemas, validation, job status, and artifact saving.
+10. Add API endpoints.
+11. Add frontend API client and types.
+12. Build input, variant switching, status, result, and history screens.
+13. Run backend, frontend, and end-to-end validation.
 
-If step 5 cannot complete, do not pretend success. Continue only with explicit notes about missing dependencies, data, weights, GPU, or external services.
+If step 7 cannot complete, do not pretend success. Continue only with explicit notes about missing dependencies, data, weights, GPU, or external services.
 
 ## 10. Validation Checklist
 

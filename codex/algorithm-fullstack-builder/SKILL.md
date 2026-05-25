@@ -1,11 +1,11 @@
 ---
 name: algorithm-fullstack-builder
-description: Use when a user uploads or provides an algorithm file, script, notebook-derived project, or algorithm repository and wants Codex to first parse the algorithm, create the correct local/runtime environment, then build a complete executable frontend-backend application around that algorithm. Applies to training, inference, prediction, optimization, simulation, reporting, data processing, NLP, CV, batch jobs, short synchronous algorithms, and long asynchronous jobs. Triggers include "把算法做成前后端", "先解析上传的算法再构建系统", "创建算法运行环境并生成前后端", "build a fullstack app for this algorithm", and "turn this script into an API and frontend".
+description: Use when a user uploads or provides an algorithm file, script, notebook-derived project, or algorithm repository and wants Codex to ask for the training main file and database connection choice, parse the algorithm, create the local runtime environment, then build a locally runnable frontend-backend application. Applies to training, inference, prediction, optimization, simulation, reporting, data processing, NLP, CV, batch jobs, synchronous algorithms, asynchronous jobs, and workflows with multiple training variants.
 ---
 
 # 算法全栈构建器
 
-使用本技能把用户上传或提供的算法文件、算法脚本、Notebook 派生项目或算法仓库，构建成可运行的前后端应用。
+使用本技能把用户上传或提供的算法文件、算法脚本、Notebook 派生项目或算法仓库，构建成可本地运行的前后端应用。
 
 必须按顺序执行三件事：
 
@@ -14,6 +14,19 @@ description: Use when a user uploads or provides an algorithm file, script, note
 3. 最后基于真实算法契约构建后端 API、任务系统、产物管理和前端页面。
 
 不要跳过算法解析直接写前端。不要默认算法一定是训练任务。
+
+## 开始前必须询问
+
+在动手分析、创建环境或生成代码前，必须先问用户：
+
+1. 训练主文件或算法主入口是哪个文件。如果用户不确定，再根据文件树推断候选并请用户确认。
+2. 是否选择提供数据库连接信息。这里的信息仅指数据库类型、host、端口号、数据库名、用户名、密码、连接参数等连接所需内容。
+
+具体数据表、字段名、字段类型和索引不要要求用户预先提供；必须通过解析算法输入、输出、训练结果、指标、日志和产物元数据推导出来，并在后端实现中创建或迁移。
+
+必须将训练结果、运行摘要、指标、日志摘要、文本报告和可序列化的结果信息持久化。若用户提供数据库连接信息，按用户指定数据库保存；若用户明确不指定数据库或暂不提供数据库信息，则默认保存在后端项目文件夹内，例如 `backend/data/` 下的 SQLite 数据库或 JSONL/JSON 文件。大文件、模型权重、图片和下载产物仍保存到 `artifacts/`，数据库或本地结果文件只保存元数据和文本/结构化信息。
+
+本技能交付的系统默认面向本地运行：后端、前端、数据库或本地结果存储都应能在用户本机或本地开发环境启动。除非用户明确要求部署，不要默认构建云部署流程。
 
 ## 1. 接收并定位算法
 
@@ -48,11 +61,14 @@ description: Use when a user uploads or provides an algorithm file, script, note
 主入口:
 输入:
 参数:
+训练方案:
 必需文件:
 输出:
 产物:
 外部依赖:
 本地依赖:
+数据库连接信息:
+结果持久化位置:
 失败模式:
 ```
 
@@ -69,6 +85,8 @@ description: Use when a user uploads or provides an algorithm file, script, note
 输入类型包括 CSV、Excel、JSON、图片、文本、目录、模型文件、上传产物和表单参数。
 
 输出类型包括摘要、指标、序列、表格、图片、生成文件、模型文件、日志、历史记录和预测结果。
+
+如果训练方式有多种，或训练流程通过命令行参数、配置文件、模型类型、数据集选项、特征选择、超参数 preset 控制，必须提取为 `训练方案`。后端 schema 要支持方案枚举或配置对象，前端要提供清晰的方案切换控件，并能保存每次运行使用的方案和参数。
 
 ## 3. 创建算法运行环境
 
@@ -189,6 +207,9 @@ backend/
 
 - 在创建任务前校验上传文件和配置。
 - 保存任务元数据、结果摘要和结构化结果。
+- 保存训练结果、指标、日志摘要和文本报告；用户未指定数据库时，默认写入后端项目文件夹内的本地持久化存储。
+- 根据算法解析结果设计表和字段，用户只提供数据库连接信息时不要反问表结构。
+- 训练存在多种方案时，保存每次运行的方案名称、配置参数和版本信息。
 - 将大文件保存到 `artifacts/`。
 - 统一错误格式：`{"error": {"code": "...", "message": "..."}}`。
 - 长任务使用 `pending`、`running`、`completed`、`failed`、`cancelled` 状态。
@@ -216,6 +237,7 @@ async def create_job(file: UploadFile = File(...), config: str | None = Form(def
 
 - `algorithm_jobs`：job id、状态、消息、输入名称、配置 JSON、摘要 JSON、结果 JSON、创建/完成时间。
 - `algorithm_artifacts`：job id、产物类型、文件名、路径、大小、MIME、创建时间。
+- `algorithm_results` 或等价结构：训练结果、指标、文本报告、日志摘要和方案配置。
 
 仅在需要分页、筛选或跨任务比较时增加预测、指标、历史或表格明细表。
 
@@ -236,6 +258,7 @@ async def create_job(file: UploadFile = File(...), config: str | None = Form(def
 根据算法契约生成页面：
 
 - 输入页：上传控件、文本框、参数表单、示例数据选择。
+- 方案页或方案控件：当训练方式有多种时，提供训练方案切换、参数 preset、说明和默认值。
 - 运行页：提交、校验、状态、取消、重试、进度和日志。
 - 结果页：摘要、指标、图表、表格、预览和下载。
 - 历史页：任务列表、筛选、对比、复用配置重跑。
@@ -284,18 +307,20 @@ downloadArtifact(jobId, artifactType): string
 严格按此顺序执行：
 
 1. 定位用户上传或提供的算法目录。
-2. 读取文件树和主入口。
-3. 解析算法契约。
-4. 创建或修复运行环境。
-5. 使用最小样例跑通原算法。
-6. 将算法封装成可调用适配器。
-7. 添加 schema、校验、任务状态和产物保存。
-8. 添加 API 端点。
-9. 添加前端 API client 和类型定义。
-10. 构建输入、状态、结果和历史页面。
-11. 运行后端、前端和端到端验证。
+2. 询问并确认训练主文件或算法主入口。
+3. 询问用户是否提供数据库连接信息，包括数据库类型、host、端口号、库名、用户名、密码和连接参数；不要求用户提供表和字段。
+4. 读取文件树和主入口。
+5. 解析算法契约、数据库表字段和可选训练方案。
+6. 创建或修复本地运行环境。
+7. 使用最小样例跑通原算法。
+8. 将算法封装成可调用适配器。
+9. 添加 schema、校验、任务状态和产物保存。
+10. 添加 API 端点。
+11. 添加前端 API client 和类型定义。
+12. 构建输入、方案切换、状态、结果和历史页面。
+13. 运行后端、前端和端到端验证。
 
-如果第 5 步无法完成，不要伪造成功。继续构建时必须在代码和最终说明中标出缺失依赖、数据、权重、GPU 或外部服务。
+如果第 7 步无法完成，不要伪造成功。继续构建时必须在代码和最终说明中标出缺失依赖、数据、权重、GPU 或外部服务。
 
 ## 10. 验证清单
 
