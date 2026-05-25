@@ -12,6 +12,8 @@
 - Codex 版：`codex/algorithm-fullstack-builder/SKILL.md`
 - Claude 版：`claude/algorithm-fullstack-builder/SKILL.md`
 
+当前状态：本 README 反映仓库当前最新维护版本的结构与工作流。
+
 两个版本遵循同一核心流程：先询问训练主文件和数据库连接信息，再解析用户上传或提供的算法，之后创建或修复本地运行环境，最后基于真实算法契约构建可本地运行的前后端应用。
 
 ## 目录结构
@@ -77,6 +79,8 @@ This repository provides two English-written skill variants:
 
 - Codex version: `codex/algorithm-fullstack-builder/SKILL.md`
 - Claude version: `claude/algorithm-fullstack-builder/SKILL.md`
+
+Current status: this README reflects the latest maintained repository structure and workflow.
 
 Both versions follow the same core rule: ask for the training main file and database connection choice first, parse the uploaded or provided algorithm, create or repair the local runtime environment, then build a locally runnable frontend-backend application from the real algorithm contract.
 

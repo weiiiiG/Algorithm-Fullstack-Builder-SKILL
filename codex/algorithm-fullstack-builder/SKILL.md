@@ -7,6 +7,8 @@ description: Use when a user uploads or provides an algorithm file, script, note
 
 Use this skill to turn an uploaded or provided algorithm file, script, notebook-derived project, or algorithm repository into a locally runnable full-stack application.
 
+Current status: this is the latest maintained Codex variant of the skill.
+
 Follow this order strictly:
 
 1. Ask the required preflight questions.

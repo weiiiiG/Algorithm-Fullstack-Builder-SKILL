@@ -7,6 +7,8 @@ description: Use when the user provides or uploads an algorithm script, notebook
 
 Use this skill to turn an uploaded or provided algorithm file, script, notebook-derived project, or algorithm repository into a locally runnable full-stack application.
 
+Current status: this is the latest maintained Claude variant of the skill.
+
 Follow this order strictly:
 
 1. Ask the required preflight questions.
