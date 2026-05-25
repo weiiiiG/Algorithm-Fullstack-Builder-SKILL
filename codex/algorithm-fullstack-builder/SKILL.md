@@ -141,24 +141,6 @@ def run_algorithm(inputs: AlgorithmInputs, config: AlgorithmConfig, artifacts_di
 - `artifacts`：可下载文件，包含类型、文件名、路径、大小和 MIME。
 - `logs`：用户需要看到的进度、警告和迭代记录。
 
-映射示例：
-
-```python
-{
-    "summary": {"rows": 1000, "device": "cuda", "target": "close"},
-    "metrics": {"mae": 0.1, "rmse": 0.2},
-    "series": [
-        {
-            "name": "prediction",
-            "points": [{"x": "2024-01-01", "actual": 1, "predicted": 1.1}],
-        }
-    ],
-    "tables": {"preview": [{"col": "value"}]},
-    "artifacts": [{"type": "model", "file_name": "model.pt"}],
-    "logs": [{"level": "info", "message": "completed"}],
-}
-```
-
 训练任务优先提供真实值对预测值、训练历史和模型产物。推理任务优先提供预测明细、置信度和预览。处理任务优先提供摘要统计、预览表和生成文件。
 
 ## 6. 选择 API 模式
@@ -244,26 +226,6 @@ async def create_job(file: UploadFile = File(...), config: str | None = Form(def
 - 下载接口不得接受任意本地路径。
 - 下载必须通过 `job_id` 和已知 `artifact_type` 定位文件。
 - 使用 `FileResponse` 或流式响应返回大文件。
-
-异步执行示例：
-
-```python
-executor = ThreadPoolExecutor(max_workers=2)
-running_tasks: dict[str, asyncio.Task] = {}
-
-async def run_background(job_id: str, payload):
-    running_tasks[job_id] = asyncio.current_task()
-    try:
-        loop = asyncio.get_running_loop()
-        result = await loop.run_in_executor(executor, run_algorithm, payload)
-        persist_success(job_id, result)
-    except asyncio.CancelledError:
-        persist_cancelled(job_id)
-    except Exception as exc:
-        persist_failed(job_id, str(exc)[:500])
-    finally:
-        running_tasks.pop(job_id, None)
-```
 
 提交接口应立即返回 `job_id`，不要阻塞等待任务完成。
 
