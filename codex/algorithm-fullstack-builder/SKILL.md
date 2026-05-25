@@ -3,140 +3,151 @@ name: algorithm-fullstack-builder
 description: Use when a user uploads or provides an algorithm file, script, notebook-derived project, or algorithm repository and wants Codex to ask for the training main file and database connection choice, parse the algorithm, create the local runtime environment, then build a locally runnable frontend-backend application. Applies to training, inference, prediction, optimization, simulation, reporting, data processing, NLP, CV, batch jobs, synchronous algorithms, asynchronous jobs, and workflows with multiple training variants.
 ---
 
-# 算法全栈构建器
+# Algorithm Fullstack Builder
 
-使用本技能把用户上传或提供的算法文件、算法脚本、Notebook 派生项目或算法仓库，构建成可本地运行的前后端应用。
+Use this skill to turn an uploaded or provided algorithm file, script, notebook-derived project, or algorithm repository into a locally runnable full-stack application.
 
-必须按顺序执行三件事：
+Follow this order strictly:
 
-1. 先解析上传来的算法，明确入口、依赖、输入、参数、输出和运行方式。
-2. 再创建或修复算法运行环境，确保算法能在本地以最小样例跑通。
-3. 最后基于真实算法契约构建后端 API、任务系统、产物管理和前端页面。
+1. Ask the required preflight questions.
+2. Parse the algorithm and extract its real contract.
+3. Create or repair the local runtime environment and run the original algorithm with a minimal sample.
+4. Build the backend, persistence layer, job flow, artifacts, frontend, and validation around that contract.
 
-不要跳过算法解析直接写前端。不要默认算法一定是训练任务。
+Do not build UI before understanding the algorithm. Do not assume every algorithm is a training workflow.
 
-## 开始前必须询问
+## Required Questions Before Starting
 
-在动手分析、创建环境或生成代码前，必须先问用户：
+Before analyzing, creating an environment, or generating code, ask the user:
 
-1. 训练主文件或算法主入口是哪个文件。如果用户不确定，再根据文件树推断候选并请用户确认。
-2. 是否选择提供数据库连接信息。这里的信息仅指数据库类型、host、端口号、数据库名、用户名、密码、连接参数等连接所需内容。
+1. Which file is the training main file or primary algorithm entry point. If the user is unsure, inspect the file tree, infer candidates, and ask for confirmation.
+2. Whether they want to provide database connection information. This means only connection details such as database type, host, port, database name, username, password, and connection options.
 
-具体数据表、字段名、字段类型和索引不要要求用户预先提供；必须通过解析算法输入、输出、训练结果、指标、日志和产物元数据推导出来，并在后端实现中创建或迁移。
+Do not ask the user to predefine table names, field names, field types, or indexes. Derive schema design by parsing algorithm inputs, outputs, training results, metrics, logs, and artifact metadata.
 
-必须将训练结果、运行摘要、指标、日志摘要、文本报告和可序列化的结果信息持久化。若用户提供数据库连接信息，按用户指定数据库保存；若用户明确不指定数据库或暂不提供数据库信息，则默认保存在后端项目文件夹内，例如 `backend/data/` 下的 SQLite 数据库或 JSONL/JSON 文件。大文件、模型权重、图片和下载产物仍保存到 `artifacts/`，数据库或本地结果文件只保存元数据和文本/结构化信息。
+Persist training results, run summaries, metrics, log summaries, text reports, and serializable result information. If the user provides database connection information, store these records in that database. If the user says not to use a database or does not provide database details, store them by default inside the backend project folder, such as a SQLite database or JSONL/JSON files under `backend/data/`.
 
-本技能交付的系统默认面向本地运行：后端、前端、数据库或本地结果存储都应能在用户本机或本地开发环境启动。除非用户明确要求部署，不要默认构建云部署流程。
+The delivered system is local-first: backend, frontend, database, and local result storage should run on the user's machine or local development environment. Do not create a cloud deployment flow unless the user explicitly asks for deployment.
 
-## 1. 接收并定位算法
+## 1. Locate The Algorithm
 
-先确认用户提供的算法形态：
+Identify what the user provided:
 
-- 单个主文件：如 `main.py`、`train.py`、`predict.py`、`run.py`。
-- 多文件项目：包含本地模块、配置、数据样例、权重或脚本。
-- Notebook 派生项目：从 `.ipynb`、导出的 `.py` 或混合代码中提取主流程。
-- 压缩包或上传目录：先解压或定位工作目录，再读取文件树。
+- Single main file, such as `main.py`, `train.py`, `predict.py`, or `run.py`.
+- Multi-file project with local modules, configs, data samples, weights, or scripts.
+- Notebook-derived project from `.ipynb`, exported `.py`, or mixed notebook code.
+- Archive or uploaded directory that needs to be unpacked or located first.
 
-用 `rg --files` 查看项目结构。用 `rg` 搜索入口、配置、文件读写、模型加载、指标、输出和硬编码路径。
+Use `rg --files` to inspect the file tree. Search for entry points, config, file I/O, model loading, metrics, outputs, and hardcoded paths.
 
-优先搜索：
+Search first for:
 
 - `if __name__ == "__main__"`
 - `main(`
 - `train(`
+- `fit(`
 - `predict(`
+- `infer(`
 - `process(`
 - `run_`
 - `argparse`
-- `to_csv`、`save`、`dump`、`torch.save`、`plt.savefig`
-- 硬编码输入路径和输出路径
+- `click`
+- `hydra`
+- `to_csv`, `save`, `dump`, `torch.save`, `joblib.dump`, `plt.savefig`
+- hardcoded input and output paths
 
-## 2. 解析算法契约
+## 2. Extract The Algorithm Contract
 
-编码前必须记录算法契约。可以写在工作笔记、实现注释或项目文档中。
+Before implementation, record this contract in notes, comments, or project docs:
 
 ```text
-算法类型:
-运行模式:
-主入口:
-输入:
-参数:
-训练方案:
-必需文件:
-输出:
-产物:
-外部依赖:
-本地依赖:
-数据库连接信息:
-结果持久化位置:
-失败模式:
+Algorithm type:
+Runtime mode:
+Primary entry point:
+Inputs:
+Input schema:
+Parameters:
+Training variants:
+Required files:
+Outputs:
+Metrics:
+Artifacts:
+External dependencies:
+Local dependencies:
+Resource requirements:
+Database connection:
+Result persistence location:
+Failure modes:
+Reproducibility controls:
 ```
 
-算法类型判断：
+Classify the workflow:
 
-- 训练：包含 epoch、optimizer、fit、validation、loss、metric 或模型保存。
-- 推理：加载模型，接受样本，输出标签、分数或预测值。
-- 处理：转换文件或表格，并写出清洗、合并、筛选后的结果。
-- 优化：搜索参数、目标函数、约束、最优值或收敛过程。
-- 仿真：运行场景、步骤、回合或重复实验。
-- 报表：聚合数据并生成图表、文档、表格或演示。
-- 混合：同一项目包含训练、推理、处理、报表等多个阶段。
+- Training: epochs, optimizer, fit, validation, loss, metrics, or model saving.
+- Inference: loads a model, accepts samples, returns labels, scores, or predictions.
+- Processing: transforms files or tables and writes cleaned, merged, filtered, or enriched outputs.
+- Optimization: searches parameters, objectives, constraints, best values, or convergence.
+- Simulation: runs scenarios, steps, episodes, or repeated experiments.
+- Reporting: aggregates data and emits charts, documents, tables, or presentations.
+- Hybrid: combines training, inference, processing, reporting, or other phases.
 
-输入类型包括 CSV、Excel、JSON、图片、文本、目录、模型文件、上传产物和表单参数。
+Input types may include CSV, Excel, JSON, images, text, directories, model files, uploaded artifacts, and manual form values. Capture required columns, file types, encodings, units, date formats, target columns, label columns, and sample constraints when they exist.
 
-输出类型包括摘要、指标、序列、表格、图片、生成文件、模型文件、日志、历史记录和预测结果。
+Output types may include summaries, metrics, series, tables, images, generated files, model files, logs, histories, and predictions.
 
-如果训练方式有多种，或训练流程通过命令行参数、配置文件、模型类型、数据集选项、特征选择、超参数 preset 控制，必须提取为 `训练方案`。后端 schema 要支持方案枚举或配置对象，前端要提供清晰的方案切换控件，并能保存每次运行使用的方案和参数。
+If there are multiple training modes, or if behavior is controlled by command-line arguments, config files, model choices, dataset options, feature selections, or hyperparameter presets, extract them as `Training variants`. Backend schemas must support variant selection or config objects. The frontend must provide clear switching controls and persist the selected variant and parameters for each run.
 
-## 3. 创建算法运行环境
+## 3. Create The Runtime Environment
 
-在构建前后端前，先让原算法在本地环境中可运行。
+Before building the app, make the original algorithm runnable locally.
 
-步骤：
+Steps:
 
-1. 识别语言、版本和包管理器，如 Python、Node、R、Java、Conda、pip、uv、Poetry。
-2. 读取依赖文件，如 `requirements.txt`、`pyproject.toml`、`environment.yml`、`package.json`。
-3. 如果缺少依赖文件，从 import、报错和 README 推断最小依赖。
-4. 创建或复用合适环境，不要污染无关项目。
-5. 准备最小样例输入。没有样例时，构造一个能触发主流程的小数据。
-6. 运行算法入口，记录命令、输入、输出、错误和耗时。
-7. 修复路径、配置和缺失依赖，直到最小样例能跑通或明确阻塞原因。
+1. Identify the language, version, and package manager, such as Python, Node, R, Java, Conda, pip, uv, or Poetry.
+2. Read dependency files such as `requirements.txt`, `pyproject.toml`, `environment.yml`, `package.json`, or lockfiles.
+3. If dependency files are missing, infer minimum dependencies from imports, errors, and README content.
+4. Create or reuse an appropriate environment without polluting unrelated projects.
+5. Prepare the smallest useful input sample. If no sample exists, create tiny data that reaches the main flow.
+6. Run the algorithm entry point and record the command, inputs, outputs, errors, and runtime.
+7. Fix paths, config, and missing dependencies until the smallest sample runs or the blocker is clear.
 
-环境原则：
+Environment rules:
 
-- 不硬编码用户机器路径。
-- 不硬编码密钥、token 或私有服务地址。
-- 大模型权重、大数据文件、GPU 和外部服务通过环境变量或配置说明。
-- 长耗时算法先用小样本验证流程，再做真实样本。
-- 原算法依赖可复现性时，保留或显式设置随机种子。
+- Do not hardcode user machine paths.
+- Do not hardcode secrets, tokens, or private service URLs.
+- Expose large model weights, datasets, GPU requirements, and external services through environment variables or config docs.
+- Validate long-running algorithms with small samples before realistic samples.
+- Preserve or explicitly configure random seeds when reproducibility matters.
+- Keep dependency installation local to the generated project or documented environment.
 
-如果算法无法运行，也要继续提取契约，但必须在最终说明中写清阻塞原因和缺失条件。
+If the algorithm cannot run, still extract the contract, but state the missing dependency, data, weight, GPU, or external service clearly in the final result.
 
-## 4. 封装算法适配层
+## 4. Wrap The Algorithm Adapter
 
-保留算法核心数学逻辑和模型行为。把路径、参数、输出、日志、图表和文件产物移到明确的服务契约中。
+Preserve the original math and model behavior. Move paths, parameters, outputs, logs, charts, and files into an explicit service contract.
 
-如果算法没有干净的可调用函数，封装一个适配层：
+If the algorithm has no clean callable function, create an adapter:
 
 ```python
 def run_algorithm(inputs: AlgorithmInputs, config: AlgorithmConfig, artifacts_dir: Path) -> AlgorithmResult:
     ...
 ```
 
-重构规则：
+Refactor rules:
 
-- 将硬编码路径改为参数。
-- 将 `print` 输出转为结构化日志或摘要。
-- 将生成文件统一写入 `artifacts_dir`。
-- 只有前端需要静态图片时才保留绘图产物。
-- CPU/GPU 选择要在配置或结果摘要中可见。
-- 不要把 UI 或 API 逻辑混入算法核心。
+- Replace hardcoded paths with parameters.
+- Convert `print` output into structured logs or summaries.
+- Write generated files into `artifacts_dir`.
+- Keep static plot artifacts only when the frontend needs them.
+- Make CPU/GPU selection visible in config or result summary.
+- Keep preprocessing explicit and reusable.
+- Do not mix UI or API logic into the algorithm core.
 
-返回值只包含 JSON 安全数据和产物元数据。返回前转换 tensor、NumPy 标量、数组、DataFrame、Path 和 datetime。
+Return only JSON-safe data plus artifact metadata. Convert tensors, NumPy scalars, arrays, DataFrames, Paths, and datetimes before returning.
 
-## 5. 统一结果结构
+## 5. Normalize Result Shape
 
-即使算法输出很特殊，也使用稳定的结果外壳：
+Use a stable result envelope even when the algorithm output is unusual:
 
 ```python
 {
@@ -150,48 +161,48 @@ def run_algorithm(inputs: AlgorithmInputs, config: AlgorithmConfig, artifacts_di
 }
 ```
 
-字段含义：
+Meanings:
 
-- `summary`：运行元信息、样本数、参数、设备、耗时和输入名称。
-- `metrics`：accuracy、loss、MAE、运行时间、行数、成功率等标量。
-- `series`：预测曲线、损失曲线、仿真轨迹、KPI 时间线等可绘图序列。
-- `tables`：排名、清洗结果、分组统计、混淆矩阵、预测明细等表格。
-- `artifacts`：可下载文件，包含类型、文件名、路径、大小和 MIME。
-- `logs`：用户需要看到的进度、警告和迭代记录。
+- `summary`: run metadata, sample counts, selected variant, parameters, device, duration, and input names.
+- `metrics`: scalar values such as accuracy, loss, MAE, runtime, row count, success rate, or objective value.
+- `series`: chart-ready series such as predictions, losses, simulation traces, optimization convergence, or KPI timelines.
+- `tables`: rankings, cleaned rows, grouped statistics, confusion matrices, prediction details, or preview rows.
+- `artifacts`: downloadable files with type, filename, path, size, and MIME type.
+- `logs`: user-relevant progress, warnings, and iteration records.
 
-训练任务优先提供真实值对预测值、训练历史和模型产物。推理任务优先提供预测明细、置信度和预览。处理任务优先提供摘要统计、预览表和生成文件。
+Training workflows should include actual-vs-predicted series, training history, validation metrics, and model artifacts when available. Inference workflows should include predictions, confidence, and previews. Processing workflows should include summaries, preview tables, and generated files.
 
-## 6. 选择 API 模式
+## 6. Choose API Mode
 
-可预测地快速完成、资源占用小的算法使用同步接口：
+Use synchronous endpoints only when the algorithm is predictably fast and light:
 
-| Method | Path | 用途 |
+| Method | Path | Purpose |
 | --- | --- | --- |
-| `GET` | `/api/health` | 健康检查 |
-| `POST` | `/api/validate` | 校验输入和参数 |
-| `POST` | `/api/execute` | 执行一次并返回结果 |
+| `GET` | `/api/health` | Health check |
+| `POST` | `/api/validate` | Validate inputs and parameters |
+| `POST` | `/api/execute` | Execute once and return the result |
 
-训练、批处理、GPU、外部服务、大文件或耗时不可控的算法使用异步任务接口：
+Use asynchronous job endpoints for training, batch processing, GPU tasks, external services, large files, or unpredictable runtimes:
 
-| Method | Path | 用途 |
+| Method | Path | Purpose |
 | --- | --- | --- |
-| `GET` | `/api/health` | 健康检查 |
-| `POST` | `/api/jobs/validate` | 校验输入和参数 |
-| `POST` | `/api/jobs` | 提交任务 |
-| `GET` | `/api/jobs` | 查询历史任务 |
-| `GET` | `/api/jobs/{job_id}` | 查询任务状态 |
-| `GET` | `/api/jobs/{job_id}/result` | 获取结构化结果 |
-| `GET` | `/api/jobs/{job_id}/artifacts/{artifact_type}` | 下载产物 |
-| `POST` | `/api/jobs/{job_id}/cancel` | 取消任务 |
-| `DELETE` | `/api/jobs/{job_id}` | 删除任务和相关记录 |
+| `GET` | `/api/health` | Health check |
+| `POST` | `/api/jobs/validate` | Validate inputs and parameters |
+| `POST` | `/api/jobs` | Submit job |
+| `GET` | `/api/jobs` | List historical jobs |
+| `GET` | `/api/jobs/{job_id}` | Get job status |
+| `GET` | `/api/jobs/{job_id}/result` | Get structured result |
+| `GET` | `/api/jobs/{job_id}/artifacts/{artifact_type}` | Download artifact |
+| `POST` | `/api/jobs/{job_id}/cancel` | Cancel job |
+| `DELETE` | `/api/jobs/{job_id}` | Delete job and records |
 
-训练类应用可以增加 `/train`、`/runs`、`/runs/{run_id}/metrics` 等语义化别名，但底层仍复用统一 job/result 模型。
+Training apps may add aliases such as `/train`, `/runs`, or `/runs/{run_id}/metrics`, but keep them backed by the same generic job/result model.
 
-## 7. 后端实现
+## 7. Backend Pattern
 
-默认技术栈：FastAPI、Pydantic、SQLAlchemy、MySQL 或 SQLite。已有项目应优先沿用现有栈。
+Default stack: FastAPI, Pydantic, SQLAlchemy, MySQL or SQLite. Prefer the existing project stack when one exists.
 
-推荐结构：
+Recommended structure:
 
 ```text
 backend/
@@ -203,161 +214,128 @@ backend/
       algorithm_adapter.py
 ```
 
-后端职责：
+Backend responsibilities:
 
-- 在创建任务前校验上传文件和配置。
-- 保存任务元数据、结果摘要和结构化结果。
-- 保存训练结果、指标、日志摘要和文本报告；用户未指定数据库时，默认写入后端项目文件夹内的本地持久化存储。
-- 根据算法解析结果设计表和字段，用户只提供数据库连接信息时不要反问表结构。
-- 训练存在多种方案时，保存每次运行的方案名称、配置参数和版本信息。
-- 将大文件保存到 `artifacts/`。
-- 统一错误格式：`{"error": {"code": "...", "message": "..."}}`。
-- 长任务使用 `pending`、`running`、`completed`、`failed`、`cancelled` 状态。
-- 启动时将遗留的 `pending/running` 任务标记为失败。
-- 限制上传大小、分页大小和等待队列长度。
+- Validate uploads and config before creating a job.
+- Store job metadata, result summaries, and structured results.
+- Store training results, metrics, log summaries, and text reports; when the user does not specify a database, write to local persistent storage inside the backend project folder.
+- Design tables and fields from parsed algorithm behavior; do not ask for table structure when the user only provides database connection details.
+- When training has multiple variants, store the variant name, config parameters, and version information for each run.
+- Save large files under `artifacts/`.
+- Return consistent errors: `{"error": {"code": "...", "message": "..."}}`.
+- Use `pending`, `running`, `completed`, `failed`, and `cancelled` for long jobs.
+- Mark stale `pending/running` jobs as failed on startup.
+- Limit upload size, page size, and pending queue length.
+- Keep artifact paths internal; never expose arbitrary filesystem paths from requests.
 
-Pydantic schema 示例：
+Minimum long-job tables:
 
-```python
-class AlgorithmConfig(BaseModel):
-    mode: Literal["fast", "accurate"] = "fast"
-    batch_size: int = Field(default=32, ge=1, le=4096)
-    threshold: float = Field(default=0.5, ge=0.0, le=1.0)
-```
+- `algorithm_jobs`: job id, status, message, input name, config JSON, summary JSON, result JSON, created/completed time.
+- `algorithm_artifacts`: job id, artifact type, filename, path, size, MIME, created time.
+- `algorithm_results` or equivalent: training results, metrics, text reports, log summaries, and variant config.
 
-multipart 上传中，配置可作为 JSON 字符串表单字段传入：
+Add specialized tables only when paging, filtering, or comparing large structured data requires them.
 
-```python
-@app.post("/api/jobs")
-async def create_job(file: UploadFile = File(...), config: str | None = Form(default=None)):
-    parsed = AlgorithmConfig() if not config else AlgorithmConfig.model_validate_json(config)
-```
+## 8. Frontend Pattern
 
-长任务最小数据库模型：
+Default stack: React, TypeScript, Vite, ECharts, and the existing UI library. Use Ant Design when no UI library exists.
 
-- `algorithm_jobs`：job id、状态、消息、输入名称、配置 JSON、摘要 JSON、结果 JSON、创建/完成时间。
-- `algorithm_artifacts`：job id、产物类型、文件名、路径、大小、MIME、创建时间。
-- `algorithm_results` 或等价结构：训练结果、指标、文本报告、日志摘要和方案配置。
+Generate screens from the algorithm contract:
 
-仅在需要分页、筛选或跨任务比较时增加预测、指标、历史或表格明细表。
+- Input screen: upload controls, text inputs, parameter form, sample selector.
+- Variant screen or controls: when training has multiple modes, provide training variant switching, parameter presets, descriptions, and defaults.
+- Run screen: submit, validate, status, cancel, retry, progress, logs.
+- Result screen: summary, metrics, charts, tables, previews, downloads.
+- History screen: job list, filters, comparison, rerun with same config.
 
-产物规则：
+Map outputs to UI:
 
-- 产物保存到 `artifacts/{job_id}/`。
-- 数据库只保存元数据。
-- 下载接口不得接受任意本地路径。
-- 下载必须通过 `job_id` 和已知 `artifact_type` 定位文件。
-- 使用 `FileResponse` 或流式响应返回大文件。
-
-提交接口应立即返回 `job_id`，不要阻塞等待任务完成。
-
-## 8. 前端实现
-
-默认技术栈：React、TypeScript、Vite、ECharts，并沿用项目已有 UI 库；无现成 UI 库时使用 Ant Design。
-
-根据算法契约生成页面：
-
-- 输入页：上传控件、文本框、参数表单、示例数据选择。
-- 方案页或方案控件：当训练方式有多种时，提供训练方案切换、参数 preset、说明和默认值。
-- 运行页：提交、校验、状态、取消、重试、进度和日志。
-- 结果页：摘要、指标、图表、表格、预览和下载。
-- 历史页：任务列表、筛选、对比、复用配置重跑。
-
-输出到 UI 的映射：
-
-| 输出 | UI |
+| Output | UI |
 | --- | --- |
-| 标量指标 | 指标卡片 |
-| 时间序列或预测序列 | 带 tooltip 和缩放的折线图 |
-| 类别计数 | 柱状图或饼图 |
-| 矩阵 | 热力图或密集表格 |
-| 行数据 | 支持分页的数据表 |
-| 图片输出 | 图片预览 |
-| 生成文件 | 下载列表 |
-| 日志/历史 | 时间线或日志面板 |
+| Scalar metrics | Metric cards |
+| Time series or prediction series | Line chart with tooltip and zoom |
+| Category counts | Bar or pie chart |
+| Matrix | Heatmap or dense table |
+| Row data | Paginated data table |
+| Image output | Image preview |
+| Generated files | Download list |
+| Logs/history | Timeline or log panel |
 
-图表规则：
+Chart rules:
 
-- 真实值对预测值：两条线，共享 x 轴，tooltip 显示真实值、预测值、绝对误差和相对误差。
-- 训练历史：展示 train/validation loss；有 reward、accuracy 时一起展示。
-- 仿真轨迹：折线图加场景选择器。
-- 优化任务：收敛曲线加最优参数表。
-- 分类任务：类别数量柱状图加预测明细表。
-- 数据处理：行数、缺失率等指标卡，加预览表。
-- 大序列使用 `dataZoom`、后端分页或降采样。
+- Actual-vs-predicted: two lines, shared x-axis, tooltip with actual, predicted, absolute error, and relative error.
+- Training history: train/validation loss, plus reward or accuracy when available.
+- Simulation traces: line chart with scenario selector.
+- Optimization: convergence chart plus best-parameter table.
+- Classification: class-count bar chart plus prediction table.
+- Processing: row-count and missing-rate cards plus preview table.
+- Large series: use `dataZoom`, backend pagination, or downsampling.
 
-使用集中式 typed client，不要在组件里分散写 `fetch`：
+Use a centralized typed API client instead of scattering `fetch` calls.
 
-```ts
-validateInput(payload): Promise<ValidationResult>
-execute(payload): Promise<Result>
-createJob(payload): Promise<{ job_id: string; status: string }>
-getJob(jobId): Promise<Job>
-getJobResult(jobId): Promise<Result>
-listJobs(params): Promise<JobPage>
-cancelJob(jobId): Promise<void>
-deleteJob(jobId): Promise<void>
-downloadArtifact(jobId, artifactType): string
-```
+The first screen must be the real work surface, not a marketing page. Keep layout dense but readable, avoid nested cards, stabilize table/chart dimensions, and stack mobile screens in workflow order.
 
-首屏直接呈现真实工作台，不做营销落地页。布局紧凑但可读，不嵌套卡片，表格和图表尺寸稳定，移动端按工作流顺序堆叠。
+## 9. Execution Workflow
 
-## 9. 推荐工作流
+Follow this order:
 
-严格按此顺序执行：
+1. Locate the uploaded or provided algorithm directory.
+2. Ask and confirm the training main file or primary algorithm entry point.
+3. Ask whether the user provides database connection details, including database type, host, port, database name, username, password, and connection options; do not require table or field definitions.
+4. Read the file tree and primary entry point.
+5. Extract the algorithm contract, database tables/fields, optional training variants, resource requirements, and reproducibility controls.
+6. Create or repair the local runtime environment.
+7. Run the original algorithm with the smallest useful sample.
+8. Wrap the algorithm as a callable adapter.
+9. Add schemas, validation, job status, result persistence, and artifact saving.
+10. Add API endpoints.
+11. Add frontend API client and types.
+12. Build input, variant switching, status, result, and history screens.
+13. Run backend, frontend, and end-to-end validation.
+14. Document local startup commands, environment variables, default storage location, and known limitations.
 
-1. 定位用户上传或提供的算法目录。
-2. 询问并确认训练主文件或算法主入口。
-3. 询问用户是否提供数据库连接信息，包括数据库类型、host、端口号、库名、用户名、密码和连接参数；不要求用户提供表和字段。
-4. 读取文件树和主入口。
-5. 解析算法契约、数据库表字段和可选训练方案。
-6. 创建或修复本地运行环境。
-7. 使用最小样例跑通原算法。
-8. 将算法封装成可调用适配器。
-9. 添加 schema、校验、任务状态和产物保存。
-10. 添加 API 端点。
-11. 添加前端 API client 和类型定义。
-12. 构建输入、方案切换、状态、结果和历史页面。
-13. 运行后端、前端和端到端验证。
+If step 7 cannot complete, do not pretend success. Continue only with explicit notes about missing dependencies, data, weights, GPU, or external services.
 
-如果第 7 步无法完成，不要伪造成功。继续构建时必须在代码和最终说明中标出缺失依赖、数据、权重、GPU 或外部服务。
+## 10. Validation Checklist
 
-## 10. 验证清单
+Backend:
 
-后端：
+- Compile or import backend code.
+- Call `/api/health`.
+- Missing inputs return clear errors.
+- Invalid config returns clear errors.
+- Sync tasks return results; async tasks return job ids quickly.
+- Completed jobs persist result and artifacts.
+- Failed jobs store error messages.
+- Artifact downloads work.
+- Delete and cancel do not leave inconsistent data.
 
-- 编译或导入后端代码。
-- 调用 `/api/health`。
-- 缺失输入能返回清晰错误。
-- 同步任务能返回结果，异步任务能快速返回 job id。
-- 完成任务能持久化结果和产物。
-- 失败任务能保存错误信息。
-- 产物下载可用。
-- 删除和取消不会留下不一致数据。
+Frontend:
 
-前端：
+- Validate forms and uploads before submit.
+- Show every job status clearly.
+- Support all detected training variants.
+- Render each output type with an appropriate component.
+- Charts are readable on desktop and mobile.
+- Downloads and history navigation work.
+- Controls do not overflow text or nest cards.
 
-- 提交前校验表单和上传错误。
-- 清晰展示每种任务状态。
-- 每类输出都用合适组件渲染。
-- 图表在桌面和移动端可读。
-- 下载和历史导航可用。
-- 控件文字不溢出，不嵌套卡片。
+End-to-end:
 
-端到端：
+- Run a small sample.
+- Run a realistic sample when feasible.
+- Compare app output with the original script when possible.
+- Confirm database records, artifact files, and API responses agree.
+- Restart the backend and confirm persisted history still loads.
 
-- 运行小样本。
-- 尽量运行真实样本。
-- 能对比时，将应用输出与原脚本输出比较。
-- 确认数据库记录、产物文件和 API 响应一致。
+## 11. Common Mistakes
 
-## 11. 常见错误
-
-- 不要未解析算法就创建前端页面。
-- 不要未创建运行环境就假设算法可执行。
-- 不要把所有算法强行做成训练看板。
-- 不要在请求处理函数里直接运行长耗时算法。
-- 不要生成文件却没有下载接口。
-- 不要直接把 DataFrame、tensor、数组、NumPy 标量或 Path 放进 JSON。
-- 不要把算法特定列名硬编码进通用应用。
-- 不要把预处理流水线混进主算法 API，除非用户明确要求集成。
+- Do not create frontend screens before parsing the algorithm.
+- Do not assume the algorithm runs before creating the runtime environment.
+- Do not force every algorithm into a training dashboard.
+- Do not require users to design database tables before analysis.
+- Do not run long algorithms directly inside request handlers.
+- Do not generate files without download endpoints.
+- Do not return DataFrames, tensors, arrays, NumPy scalars, or Paths directly in JSON.
+- Do not hardcode algorithm-specific columns into a generic app.
+- Do not mix preprocessing pipelines into the main algorithm API unless the user explicitly asks for an integrated pipeline.
